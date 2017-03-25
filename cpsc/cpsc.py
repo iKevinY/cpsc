@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import glob
+import math
 import difflib
 from subprocess import PIPE, Popen
 from collections import defaultdict
@@ -26,6 +27,8 @@ def print_diff(seqm):
             click.secho(seqm.a[a0:a1], fg='red', nl=False, bold=True)
             click.secho(seqm.b[b0:b1], fg='green', nl=False, bold=True)
 
+    click.echo()
+
 
 @click.command(name='cpsc')
 @click.argument('program', type=click.Path(exists=True))
@@ -42,6 +45,7 @@ def main(program, test_prefix):
             in_f, out_f = sorted(filenames)
             click.secho("{} / {}".format(in_f, out_f), bold=True)
 
+            # TODO: Determine interpreter to call (or just run binary)
             cmd = ('python', program, in_f)
 
             with open(in_f) as inp:
@@ -49,11 +53,20 @@ def main(program, test_prefix):
                 stdout = proc.communicate(input=inp.read().encode())[0]
 
             # Convert bytes to string if on Python 3
-            stdout = stdout.decode()
+            stdout = stdout.decode().split('\n')
 
             with open(out_f) as out:
-                expected = out.read()
+                expected = out.read().split('\n')
 
-            for a, b in zip_longest(stdout.split('\n'), expected.split('\n'), fillvalue=''):
-                sm = difflib.SequenceMatcher(None, a + '\n', b + '\n')
+            # Add line numbers to output
+            lines = max(len(stdout), len(expected))
+            padding = int(math.log10(lines)) + 1
+
+            for line_no, (a, b) in enumerate(zip_longest(stdout, expected, fillvalue=''), start=1):
+                # Skip double-newlines
+                if not a and not b:
+                    continue
+
+                click.secho("{: >{pad}} | ".format(line_no, pad=padding), nl=False, bold=True)
+                sm = difflib.SequenceMatcher(None, a, b)
                 print_diff(sm)
